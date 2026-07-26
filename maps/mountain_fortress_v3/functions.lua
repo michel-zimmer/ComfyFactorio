@@ -49,6 +49,10 @@ local this =
     editor_mode = {},
     techs = {},
     limit_types = {},
+    -- Admin difficulty choices. Lives here rather than in the main table because
+    -- reset_main_table wipes that one on every map reset, and reset_func_table (the reset
+    -- for this table) deliberately leaves it alone, so the settings outlive a soft reset.
+    difficulty_prefs = { overrides = {} },
     starting_items =
     {
         ['pistol'] =
@@ -2427,14 +2431,24 @@ local balance_fields =
     'minimum_wave_interval'
 }
 
+--- Global.register replaces `this` with the saved copy on load, so a save made before
+--- difficulty_prefs existed has no such field. Create it on first touch instead of relying on
+--- the module literal.
+local function get_difficulty_prefs()
+    if not this.difficulty_prefs then
+        this.difficulty_prefs = { overrides = {} }
+    end
+    return this.difficulty_prefs
+end
+
 local function get_difficulty_balance(index)
     local row = difficulty_balance[index]
     if not row then
         return difficulty_balance[2]
     end
 
-    local overrides = Public.get('difficulty_overrides')
-    if not overrides or not next(overrides) then
+    local overrides = get_difficulty_prefs().overrides
+    if not next(overrides) then
         return row
     end
 
@@ -2463,6 +2477,48 @@ end
 --- same effective numbers that are actually applied.
 function Public.get_difficulty_player_count()
     return calc_players()
+end
+
+--- The overrides currently merged over the selected row. Read-only for callers.
+function Public.get_difficulty_overrides()
+    return get_difficulty_prefs().overrides
+end
+
+--- Pass nil as the value to drop a single override.
+function Public.set_difficulty_override(field, value)
+    get_difficulty_prefs().overrides[field] = value
+end
+
+function Public.clear_difficulty_overrides()
+    get_difficulty_prefs().overrides = {}
+end
+
+--- Remembers what an admin picked so it can be restored after a map reset, which otherwise
+--- puts the poll back to row 1 (tasks.lua, reset_difficulty_poll) and the group size back to
+--- the wave defense default. A nil argument leaves that preference untouched.
+function Public.set_difficulty_prefs(index, value, group_size)
+    local prefs = get_difficulty_prefs()
+    prefs.index = index or prefs.index
+    prefs.value = value or prefs.value
+    prefs.group_size = group_size or prefs.group_size
+end
+
+--- Re-applies the remembered choices after a map reset. Raised from tasks.lua after
+--- reset_difficulty_poll and before set_difficulty, so the restored row is what gets applied.
+local function restore_difficulty_prefs()
+    local prefs = get_difficulty_prefs()
+
+    if prefs.index and difficulty_balance[prefs.index] then
+        Difficulty.set('index', prefs.index)
+        if prefs.value then
+            Difficulty.set('value', prefs.value)
+        end
+    end
+
+    if prefs.group_size then
+        WD.increase_average_unit_group_size(false)
+        WD.set('average_unit_group_size', prefs.group_size)
+    end
 end
 
 local function should_skip_difficulty_update()
@@ -2579,7 +2635,10 @@ local function log_wave_interval(context, wave_interval, threat_check, threat_fl
         should_log = true
     end
 
-    if context.Diff.index ~= 1 and context.Diff.index ~= 2 and context.Diff.index ~= 3 then
+    -- An index with no row silently falls back to row 2, i.e. to a harder game, so keep
+    -- shouting about it. Checked against the table rather than a hardcoded 1-3 so the extra
+    -- easier rows are treated as valid and stay subject to the dedup above.
+    if not difficulty_balance[context.Diff.index] then
         should_log = true
     end
 
@@ -3875,6 +3934,7 @@ Event.on_nth_tick(35, do_clear_rocks_slowly)
 Event.on_nth_tick(35, do_replace_tiles_slowly)
 Event.on_nth_tick(200, do_custom_surface_funcs)
 Event.on_nth_tick(60, set_difficulty)
+Event.add(ServerCommands.events.on_game_reset, restore_difficulty_prefs)
 Event.add(ServerCommands.events.on_wave_created, on_wave_created)
 Event.add(ServerCommands.events.on_primary_target_missing, on_primary_target_missing)
 

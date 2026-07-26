@@ -561,7 +561,7 @@ end
 local function build_difficulty_table()
     local rows = Public.get_difficulty_balance_rows()
     local fields = Public.get_difficulty_balance_fields()
-    local overrides = Public.get('difficulty_overrides') or {}
+    local overrides = Public.get_difficulty_overrides()
     local active_index = Difficulty.get('index')
 
     -- Headed by the raw field names so they can be copied straight into
@@ -666,7 +666,7 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
             target = tostring(target)
 
             if target == 'reset' then
-                Public.set('difficulty_overrides', {})
+                Public.clear_difficulty_overrides()
                 player.print('Difficulty overrides cleared.', { color = CommandColor })
                 print_difficulty_state(player)
                 return
@@ -687,7 +687,9 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
                 if value then
                     Difficulty.set('value', value)
                 end
-                Public.set('difficulty_overrides', {})
+                Public.clear_difficulty_overrides()
+                -- Remembered so a map reset restores this row instead of dropping back to 1.
+                Public.set_difficulty_prefs(index, value)
 
                 game.print(mapkeeper .. ' difficulty is now ' .. difficulty_row_name(index, row) .. '.', { color = CommandColor })
                 print_difficulty_state(player)
@@ -709,6 +711,7 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
                 -- Growth only kicks in above wave 1000, but disable it anyway so the value sticks.
                 WD.increase_average_unit_group_size(false)
                 WD.set('average_unit_group_size', math.floor(number))
+                Public.set_difficulty_prefs(nil, nil, math.floor(number))
                 player.print('average_unit_group_size set to ' .. math.floor(number) .. '.', { color = CommandColor })
                 print_difficulty_state(player)
                 return
@@ -728,9 +731,7 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
                 return false
             end
 
-            local overrides = Public.get('difficulty_overrides') or {}
-            overrides[target] = number
-            Public.set('difficulty_overrides', overrides)
+            Public.set_difficulty_override(target, number)
 
             player.print(target .. ' overridden to ' .. number .. '.', { color = CommandColor })
             print_difficulty_state(player)
