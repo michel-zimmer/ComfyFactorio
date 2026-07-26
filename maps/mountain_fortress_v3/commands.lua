@@ -548,16 +548,39 @@ local function difficulty_row_value(index, row)
     return voted and voted.value
 end
 
-local function print_difficulty_state(player)
+local function pad(text, width, align_right)
+    local fill = string.rep(' ', width - #text)
+    if align_right then
+        return fill .. text
+    end
+    return text .. fill
+end
+
+--- Renders the balance rows as an ascii table. Column widths are measured from the content
+--- rather than hardcoded, so adding a row or a balance field cannot break the layout.
+local function build_difficulty_table()
     local rows = Public.get_difficulty_balance_rows()
     local fields = Public.get_difficulty_balance_fields()
     local overrides = Public.get('difficulty_overrides') or {}
     local active_index = Difficulty.get('index')
 
-    player.print('--- Difficulty rows (> = active, * = overridden) ---', { color = CommandColor })
+    -- Headed by the raw field names so they can be copied straight into
+    -- /mtn_difficulty <field> <value>. Costs width, but keeps the command self-documenting.
+    local header = { '', '#', 'name' }
+    for _, field in ipairs(fields) do
+        header[#header + 1] = field
+    end
+
+    local lines = { header }
 
     for index, row in ipairs(rows) do
-        local parts = {}
+        local line =
+        {
+            index == active_index and '>' or '',
+            tostring(index),
+            difficulty_row_name(index, row)
+        }
+
         for _, field in ipairs(fields) do
             local value = row[field]
             local marker = ''
@@ -565,21 +588,61 @@ local function print_difficulty_state(player)
                 value = overrides[field]
                 marker = '*'
             end
-            parts[#parts + 1] = field .. '=' .. tostring(value) .. marker
+            line[#line + 1] = tostring(value) .. marker
         end
 
-        local prefix = index == active_index and '>' or ' '
-        player.print(prefix .. ' [' .. index .. '] ' .. difficulty_row_name(index, row) .. ' -- ' .. table.concat(parts, ' '))
+        lines[#lines + 1] = line
     end
 
+    local widths = {}
+    for _, line in ipairs(lines) do
+        for column, cell in ipairs(line) do
+            if not widths[column] or #cell > widths[column] then
+                widths[column] = #cell
+            end
+        end
+    end
+
+    -- The marker, index and name columns read better left aligned, the numbers right aligned.
+    local function render(line)
+        local cells = {}
+        for column = 1, #widths do
+            cells[column] = pad(line[column] or '', widths[column], column > 3)
+        end
+        return table.concat(cells, ' | ')
+    end
+
+    local separator = {}
+    for column = 1, #widths do
+        separator[column] = string.rep('-', widths[column])
+    end
+
+    local out = { render(lines[1]), table.concat(separator, '-+-') }
+    for index = 2, #lines do
+        out[#out + 1] = render(lines[index])
+    end
+
+    return table.concat(out, '\n')
+end
+
+local function print_difficulty_state(player)
     -- Read the applied numbers straight off wave defense rather than recomputing them, so
     -- this can never drift from what set_difficulty actually wrote.
     local wd = WD.get_table()
+
+    local applied = table.concat(
+        {
+            'applied now, ' .. Public.get_difficulty_player_count() .. ' player(s): ',
+            'wave_interval=' .. wd.wave_interval .. ' ticks (' .. math.floor(wd.wave_interval / 60) .. 's)',
+            ', threat_gain_multiplier=' .. math.round(wd.threat_gain_multiplier, 3),
+            ', max_active_biters=' .. math.floor(wd.max_active_biters),
+            ', average_unit_group_size=' .. wd.average_unit_group_size
+        }
+    )
+
+    -- Leading newline: the first line would otherwise start wherever the console prefix ended.
     player.print(
-        'Applied now (' .. Public.get_difficulty_player_count() .. ' players): wave_interval=' ..
-        wd.wave_interval .. ' ticks (' .. math.floor(wd.wave_interval / 60) .. 's), threat_gain_multiplier=' ..
-        math.round(wd.threat_gain_multiplier, 3) .. ', max_active_biters=' .. math.floor(wd.max_active_biters) ..
-        ', average_unit_group_size=' .. wd.average_unit_group_size,
+        '\n' .. build_difficulty_table() .. '\n\n' .. applied .. '\n> = active row, * = overridden value\n',
         { color = CommandColor }
     )
 end
