@@ -163,6 +163,15 @@ local function is_inside_zone(data)
     return false
 end
 
+-- when default_surface is active, wagon interiors live on the planet surface itself, parked far out
+-- on the x axis - such players are riding the train, not stranded out in the open
+local function is_inside_train(player, default_surface)
+    if default_surface and player.physical_position.x > 700 then
+        return true
+    end
+    return ICFunctions.get_player_surface(player)
+end
+
 local function hurt_players_outside_of_aura()
     local Diff = Difficulty.get()
     if not Diff then
@@ -192,10 +201,11 @@ local function hurt_players_outside_of_aura()
 
     local upgrades = Public.get('upgrades')
     local starting_planet = Public.get_planet()
+    local default_surface = Public.get('default_surface')
 
     Core.iter_connected_players(
         function (player)
-            if sub(player.physical_surface.name, 0, #starting_planet) == starting_planet then
+            if sub(player.physical_surface.name, 0, #starting_planet) == starting_planet and not is_inside_train(player, default_surface) then
                 local position = player.physical_position
                 local inside = ((position.x - loco.x) ^ 2 + (position.y - loco.y) ^ 2) < upgrades.locomotive_aura_radius ^ 2
                 if not inside then
