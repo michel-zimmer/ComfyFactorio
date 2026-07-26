@@ -628,6 +628,7 @@ function Public.reset_main_table()
     this.coin_amount = 1
     this.default_surface = true
     this.difficulty_set = false
+    this.difficulty_overrides = {}
     this.bonus_xp_on_join = 250
     this.main_market_items = {}
     this.spill_items_to_surface = false

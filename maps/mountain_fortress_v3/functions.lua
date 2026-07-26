@@ -2409,11 +2409,60 @@ local difficulty_balance =
 {
     [1] = { max_active_biters = 768, threat_gain = 1.2, early_wave_interval = 4500, late_wave_interval = 3600, player_step = 60, minimum_wave_interval = 2000 },
     [2] = { max_active_biters = 845, threat_gain = 2, early_wave_interval = 3000, late_wave_interval = 2600, player_step = 45, minimum_wave_interval = 1800 },
-    [3] = { max_active_biters = 1000, threat_gain = 4, early_wave_interval = 2600, late_wave_interval = 2200, player_step = 30, minimum_wave_interval = 1600 }
+    [3] = { max_active_biters = 1000, threat_gain = 4, early_wave_interval = 2600, late_wave_interval = 2200, player_step = 30, minimum_wave_interval = 1600 },
+    -- Rows below 1 are not part of the vote ladder and have no entry in the difficulty module's
+    -- difficulties table, so they carry their own name/value and are only reachable via
+    -- /mtn_difficulty. Re-enabling the vote gui would need matching rows added there.
+    [4] = { name = 'Cosy builders', value = 0.75, max_active_biters = 768, threat_gain = 0.9, early_wave_interval = 6600, late_wave_interval = 5400, player_step = 60, minimum_wave_interval = 2000 },
+    [5] = { name = 'Solo testing', value = 0.5, max_active_biters = 400, threat_gain = 0.3, early_wave_interval = 10800, late_wave_interval = 9000, player_step = 60, minimum_wave_interval = 2000 }
+}
+
+local balance_fields =
+{
+    'max_active_biters',
+    'threat_gain',
+    'early_wave_interval',
+    'late_wave_interval',
+    'player_step',
+    'minimum_wave_interval'
 }
 
 local function get_difficulty_balance(index)
-    return difficulty_balance[index] or difficulty_balance[2]
+    local row = difficulty_balance[index]
+    if not row then
+        return difficulty_balance[2]
+    end
+
+    local overrides = Public.get('difficulty_overrides')
+    if not overrides or not next(overrides) then
+        return row
+    end
+
+    local merged = {}
+    for k, v in pairs(row) do
+        merged[k] = v
+    end
+    for k, v in pairs(overrides) do
+        merged[k] = v
+    end
+
+    return merged
+end
+
+--- Returns the raw balance rows, so commands can list and validate them.
+function Public.get_difficulty_balance_rows()
+    return difficulty_balance
+end
+
+--- Returns the names of the fields that may be overridden per row.
+function Public.get_difficulty_balance_fields()
+    return balance_fields
+end
+
+--- Returns the player count that set_difficulty scales with, so commands can report the
+--- same effective numbers that are actually applied.
+function Public.get_difficulty_player_count()
+    return calc_players()
 end
 
 local function should_skip_difficulty_update()

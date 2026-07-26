@@ -5,6 +5,8 @@ local Collapse = require 'modules.collapse'
 local WD = require 'modules.wave_defense.table'
 local Discord = require 'utils.discord_handler'
 local Commands = require 'utils.commands'
+local Color = require 'utils.color_presets'
+local Difficulty = require 'modules.difficulty_vote_by_amount'
 local mapkeeper = '[color=blue]Mapkeeper:[/color]'
 local CommandColor = { r = 0.98, g = 0.66, b = 0.22 }
 
@@ -523,6 +525,147 @@ Commands.new('mtn_grant_fake_buff', 'Usable only for admins - used to debug buff
                     Public.buff_main_frame(p)
                 end
             end)
+        end
+    )
+
+--- Rows 1-3 take their name from the difficulty vote module, the extra easier rows carry
+--- their own, since they deliberately have no entry in the vote ladder.
+local function difficulty_row_name(index, row)
+    if row.name then
+        return row.name
+    end
+
+    local voted = Difficulty.get('difficulties')[index]
+    return voted and voted.name or ('row ' .. index)
+end
+
+local function difficulty_row_value(index, row)
+    if row.value then
+        return row.value
+    end
+
+    local voted = Difficulty.get('difficulties')[index]
+    return voted and voted.value
+end
+
+local function print_difficulty_state(player)
+    local rows = Public.get_difficulty_balance_rows()
+    local fields = Public.get_difficulty_balance_fields()
+    local overrides = Public.get('difficulty_overrides') or {}
+    local active_index = Difficulty.get('index')
+
+    player.print('--- Difficulty rows (> = active, * = overridden) ---', { color = CommandColor })
+
+    for index, row in ipairs(rows) do
+        local parts = {}
+        for _, field in ipairs(fields) do
+            local value = row[field]
+            local marker = ''
+            if index == active_index and overrides[field] ~= nil then
+                value = overrides[field]
+                marker = '*'
+            end
+            parts[#parts + 1] = field .. '=' .. tostring(value) .. marker
+        end
+
+        local prefix = index == active_index and '>' or ' '
+        player.print(prefix .. ' [' .. index .. '] ' .. difficulty_row_name(index, row) .. ' -- ' .. table.concat(parts, ' '))
+    end
+
+    -- Read the applied numbers straight off wave defense rather than recomputing them, so
+    -- this can never drift from what set_difficulty actually wrote.
+    local wd = WD.get_table()
+    player.print(
+        'Applied now (' .. Public.get_difficulty_player_count() .. ' players): wave_interval=' ..
+        wd.wave_interval .. ' ticks (' .. math.floor(wd.wave_interval / 60) .. 's), threat_gain_multiplier=' ..
+        math.round(wd.threat_gain_multiplier, 3) .. ', max_active_biters=' .. math.floor(wd.max_active_biters) ..
+        ', average_unit_group_size=' .. wd.average_unit_group_size,
+        { color = CommandColor }
+    )
+end
+
+Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty rows with no argument, otherwise selects a row, overrides a single field, or resets overrides.')
+    :require_admin()
+    :add_parameter('row/field/reset', true, 'string')
+    :add_parameter('value', true, 'string')
+    :callback(
+        function (player, target, new_value)
+            local rows = Public.get_difficulty_balance_rows()
+
+            if not target then
+                print_difficulty_state(player)
+                return
+            end
+
+            if target == 'reset' then
+                Public.set('difficulty_overrides', {})
+                player.print('Difficulty overrides cleared.', { color = CommandColor })
+                print_difficulty_state(player)
+                return
+            end
+
+            -- Selecting a row. Validated against the table rather than leaning on
+            -- get_difficulty_balance's fallback, which silently resolves to row 2 (harder).
+            local index = tonumber(target)
+            if index then
+                local row = rows[index]
+                if not row then
+                    player.print('There is no difficulty row ' .. index .. '. Valid rows are 1-' .. #rows .. '.', { color = Color.warning })
+                    return false
+                end
+
+                Difficulty.set('index', index)
+                local value = difficulty_row_value(index, row)
+                if value then
+                    Difficulty.set('value', value)
+                end
+                Public.set('difficulty_overrides', {})
+
+                game.print(mapkeeper .. ' difficulty is now ' .. difficulty_row_name(index, row) .. '.', { color = CommandColor })
+                print_difficulty_state(player)
+                return
+            end
+
+            -- Overriding a single field.
+            local number = tonumber(new_value)
+            if not number then
+                player.print('Expected a number for ' .. target .. ', got "' .. tostring(new_value) .. '".', { color = Color.warning })
+                return false
+            end
+
+            if target == 'group_size' then
+                if number < 1 then
+                    player.print('group_size must be at least 1.', { color = Color.warning })
+                    return false
+                end
+                -- Growth only kicks in above wave 1000, but disable it anyway so the value sticks.
+                WD.increase_average_unit_group_size(false)
+                WD.set('average_unit_group_size', math.floor(number))
+                player.print('average_unit_group_size set to ' .. math.floor(number) .. '.', { color = CommandColor })
+                print_difficulty_state(player)
+                return
+            end
+
+            local fields = Public.get_difficulty_balance_fields()
+            local known = false
+            for _, field in ipairs(fields) do
+                if field == target then
+                    known = true
+                    break
+                end
+            end
+
+            if not known then
+                player.print('Unknown field "' .. target .. '". Valid fields: ' .. table.concat(fields, ', ') .. ', group_size.', { color = Color.warning })
+                return false
+            end
+
+            local overrides = Public.get('difficulty_overrides') or {}
+            overrides[target] = number
+            Public.set('difficulty_overrides', overrides)
+
+            player.print(target .. ' overridden to ' .. number .. '.', { color = CommandColor })
+            print_difficulty_state(player)
         end
     )
 
