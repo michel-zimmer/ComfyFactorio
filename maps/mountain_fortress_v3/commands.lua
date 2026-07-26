@@ -649,8 +649,10 @@ end
 
 Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty rows with no argument, otherwise selects a row, overrides a single field, or resets overrides.')
     :require_admin()
-    :add_parameter('row/field/reset', true, 'string')
-    :add_parameter('value', true, 'string')
+    -- 'any' rather than 'string': the framework runs every argument through tonumber before
+    -- type checking, so a 'string' parameter rejects "5" and "0.6" outright.
+    :add_parameter('row/field/reset', true, 'any')
+    :add_parameter('value', true, 'any')
     :callback(
         function (player, target, new_value)
             local rows = Public.get_difficulty_balance_rows()
@@ -659,6 +661,9 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
                 print_difficulty_state(player)
                 return
             end
+
+            -- May arrive as a number, since the framework pre-converts numeric arguments.
+            target = tostring(target)
 
             if target == 'reset' then
                 Public.set('difficulty_overrides', {})
