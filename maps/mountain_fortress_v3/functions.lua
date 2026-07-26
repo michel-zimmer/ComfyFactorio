@@ -850,7 +850,9 @@ local function fill_raffles(level)
                     end
                 end
             end
-        elseif family == "space_age" and Public.is_modded_pt2 then
+        elseif family == "space_age" and not Public.is_modded_pt2 then
+            goto skip_family
+        elseif family == "space_age" then
             for type_name, sizes in pairs(groups) do
                 for size, tiers in pairs(sizes) do
                     for _, range in pairs(tiers) do
@@ -3415,15 +3417,29 @@ function Public.disable_tech()
     force.technologies['artillery-shell-range-1'].researched = false
     force.technologies['artillery-shell-speed-1'].enabled = false
     force.technologies['artillery-shell-speed-1'].researched = false
-    if Public.get('spaces_age') then
-        force.technologies['artillery-shell-damage-1'].enabled = false
-        force.technologies['artillery-shell-damage-1'].researched = false
-        force.technologies['elevated-rail'].enabled = false
-        force.technologies['elevated-rail'].researched = false
-        force.technologies['rail-support-foundations'].enabled = false
-        force.technologies['rail-support-foundations'].researched = false
-        force.recipes['railgun-turret'].enabled = false
-        force.recipes['thruster'].enabled = false
+    if Public.get('space_age') then
+        -- elevated-rail and rail-support-foundations come from the elevated-rails mod, which
+        -- ships with Space Age but can be disabled on its own, so check before touching them.
+        local function disable_tech_if_present(name)
+            local tech = force.technologies[name]
+            if tech then
+                tech.enabled = false
+                tech.researched = false
+            end
+        end
+
+        local function disable_recipe_if_present(name)
+            local recipe = force.recipes[name]
+            if recipe then
+                recipe.enabled = false
+            end
+        end
+
+        disable_tech_if_present('artillery-shell-damage-1')
+        disable_tech_if_present('elevated-rail')
+        disable_tech_if_present('rail-support-foundations')
+        disable_recipe_if_present('railgun-turret')
+        disable_recipe_if_present('thruster')
     end
     force.technologies['lamp'].researched = true
     force.technologies['railway'].researched = true
