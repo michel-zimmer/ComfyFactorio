@@ -2411,14 +2411,14 @@ end
 
 local difficulty_balance =
 {
-    [1] = { max_active_biters = 768, threat_gain = 1.2, early_wave_interval = 4500, late_wave_interval = 3600, player_step = 60, minimum_wave_interval = 2000 },
-    [2] = { max_active_biters = 845, threat_gain = 2, early_wave_interval = 3000, late_wave_interval = 2600, player_step = 45, minimum_wave_interval = 1800 },
-    [3] = { max_active_biters = 1000, threat_gain = 4, early_wave_interval = 2600, late_wave_interval = 2200, player_step = 30, minimum_wave_interval = 1600 },
+    [1] = { max_active_biters = 768, threat_gain = 1.2, early_wave_interval = 4500, late_wave_interval = 3600, player_step = 60, minimum_wave_interval = 2000, aura_burn = 0, aura_burn_kills = 0 },
+    [2] = { max_active_biters = 845, threat_gain = 2, early_wave_interval = 3000, late_wave_interval = 2600, player_step = 45, minimum_wave_interval = 1800, aura_burn = 1 / 18, aura_burn_kills = 0 },
+    [3] = { max_active_biters = 1000, threat_gain = 4, early_wave_interval = 2600, late_wave_interval = 2200, player_step = 30, minimum_wave_interval = 1600, aura_burn = 1, aura_burn_kills = 1 },
     -- Rows below 1 are not part of the vote ladder and have no entry in the difficulty module's
     -- difficulties table, so they carry their own name/value and are only reachable via
     -- /mtn_difficulty. Re-enabling the vote gui would need matching rows added there.
-    [4] = { name = 'Cosy builders', value = 0.75, max_active_biters = 768, threat_gain = 0.9, early_wave_interval = 6600, late_wave_interval = 5400, player_step = 60, minimum_wave_interval = 2000 },
-    [5] = { name = 'Solo testing', value = 0.5, max_active_biters = 400, threat_gain = 0.3, early_wave_interval = 10800, late_wave_interval = 9000, player_step = 60, minimum_wave_interval = 2000 }
+    [4] = { name = 'Cosy builders', value = 0.75, max_active_biters = 768, threat_gain = 0.9, early_wave_interval = 6600, late_wave_interval = 5400, player_step = 60, minimum_wave_interval = 2000, aura_burn = 0, aura_burn_kills = 0 },
+    [5] = { name = 'Solo testing', value = 0.5, max_active_biters = 400, threat_gain = 0.3, early_wave_interval = 10800, late_wave_interval = 9000, player_step = 60, minimum_wave_interval = 2000, aura_burn = 0, aura_burn_kills = 0 }
 }
 
 local balance_fields =
@@ -2428,7 +2428,13 @@ local balance_fields =
     'early_wave_interval',
     'late_wave_interval',
     'player_step',
-    'minimum_wave_interval'
+    'minimum_wave_interval',
+    -- Fraction of max health burned off per pulse when standing outside the locomotive aura.
+    -- 0 switches the mechanic off entirely for that row.
+    'aura_burn',
+    -- 1 kills outright instead of applying aura_burn, for rows where leaving the train is meant
+    -- to be fatal rather than survivable.
+    'aura_burn_kills'
 }
 
 --- Global.register replaces `this` with the saved copy on load, so a save made before
@@ -2461,6 +2467,13 @@ local function get_difficulty_balance(index)
     end
 
     return merged
+end
+
+--- The balance row for a difficulty index, with any admin overrides merged in. Exposed so
+--- consumers outside this module (locomotive aura burn) read the same values the wave/threat
+--- tuning does, instead of branching on the index themselves.
+function Public.get_difficulty_balance(index)
+    return get_difficulty_balance(index)
 end
 
 --- Returns the raw balance rows, so commands can list and validate them.

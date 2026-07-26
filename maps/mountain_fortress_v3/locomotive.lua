@@ -181,12 +181,14 @@ local function hurt_players_outside_of_aura()
     if not difficulty_set then
         return
     end
-    local death_mode = false
-    if Diff.index == 1 then
+    -- Encoded per difficulty row rather than branched on the index here, so rows outside the
+    -- vote ladder (and admin overrides) control the burn like they control the wave tuning.
+    local balance = Public.get_difficulty_balance(Diff.index)
+    local aura_burn = balance and balance.aura_burn or 0
+    if aura_burn <= 0 then
         return
-    elseif Diff.index == 3 then
-        death_mode = true
     end
+    local death_mode = balance.aura_burn_kills == 1
 
     local loco_surface = Public.get('loco_surface')
     if not (loco_surface and loco_surface.valid) then
@@ -247,7 +249,7 @@ local function hurt_players_outside_of_aura()
                                     piece.energy = 0
                                 end
                             end
-                            local damage = (max_health / 18)
+                            local damage = max_health * aura_burn
                             if entity.valid then
                                 if entity.health - damage <= 0 then
                                     if entity.name == 'character' then
