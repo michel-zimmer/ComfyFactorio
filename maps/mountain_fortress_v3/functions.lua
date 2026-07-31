@@ -2417,8 +2417,14 @@ local difficulty_balance =
     -- Rows below 1 are not part of the vote ladder and have no entry in the difficulty module's
     -- difficulties table, so they carry their own name/value and are only reachable via
     -- /mtn_difficulty. Re-enabling the vote gui would need matching rows added there.
-    [4] = { name = 'Cosy builders', value = 0.75, max_active_biters = 768, threat_gain = 0.9, early_wave_interval = 6600, late_wave_interval = 5400, player_step = 60, minimum_wave_interval = 2000, aura_burn = 0, aura_burn_kills = 0 },
-    [5] = { name = 'Solo testing', value = 0.5, max_active_biters = 400, threat_gain = 0.3, early_wave_interval = 10800, late_wave_interval = 9000, player_step = 60, minimum_wave_interval = 2000, aura_burn = 0, aura_burn_kills = 0 }
+    --
+    -- minimum_wave_interval is not just a lower clamp: compute_wave_interval drops straight to it
+    -- whenever wave defense threat sits at or below zero, which the low threat_gain on these rows
+    -- makes the common case rather than the exception. Left at row 1's 2000 it would hand the
+    -- easiest rows the fastest wave counter of all, and the counter is what drives enemy tiers,
+    -- evolution and boss waves. So it is kept just under late_wave_interval here.
+    [4] = { name = 'Cosy builders', value = 0.75, max_active_biters = 768, threat_gain = 0.9, early_wave_interval = 6600, late_wave_interval = 5400, player_step = 60, minimum_wave_interval = 4800, aura_burn = 0, aura_burn_kills = 0 },
+    [5] = { name = 'Solo testing', value = 0.5, max_active_biters = 400, threat_gain = 0.3, early_wave_interval = 10800, late_wave_interval = 9000, player_step = 60, minimum_wave_interval = 8400, aura_burn = 0, aura_burn_kills = 0 }
 }
 
 local balance_fields =
