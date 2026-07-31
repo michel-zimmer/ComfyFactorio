@@ -528,26 +528,6 @@ Commands.new('mtn_grant_fake_buff', 'Usable only for admins - used to debug buff
         end
     )
 
---- Rows 1-3 take their name from the difficulty vote module, the extra easier rows carry
---- their own, since they deliberately have no entry in the vote ladder.
-local function difficulty_row_name(index, row)
-    if row.name then
-        return row.name
-    end
-
-    local voted = Difficulty.get('difficulties')[index]
-    return voted and voted.name or ('row ' .. index)
-end
-
-local function difficulty_row_value(index, row)
-    if row.value then
-        return row.value
-    end
-
-    local voted = Difficulty.get('difficulties')[index]
-    return voted and voted.value
-end
-
 local function pad(text, width, align_right)
     local fill = string.rep(' ', width - #text)
     if align_right then
@@ -578,7 +558,7 @@ local function build_difficulty_table()
         {
             index == active_index and '>' or '',
             tostring(index),
-            difficulty_row_name(index, row)
+            Public.get_difficulty_identity(index).name
         }
 
         for _, field in ipairs(fields) do
@@ -691,16 +671,12 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
                     return false
                 end
 
-                Difficulty.set('index', index)
-                local value = difficulty_row_value(index, row)
-                if value then
-                    Difficulty.set('value', value)
-                end
                 Public.clear_difficulty_overrides()
+                local identity = Public.apply_difficulty_row(index)
                 -- Remembered so a map reset restores this row instead of dropping back to 1.
-                Public.set_difficulty_prefs(index, value)
+                Public.set_difficulty_prefs(index)
 
-                game.print(mapkeeper .. ' difficulty is now ' .. difficulty_row_name(index, row) .. '.', { color = CommandColor })
+                game.print(mapkeeper .. ' difficulty is now ' .. identity.name .. '.', { color = CommandColor })
                 print_difficulty_state(player)
                 return
             end

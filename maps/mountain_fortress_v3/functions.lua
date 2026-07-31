@@ -2423,8 +2423,11 @@ local difficulty_balance =
     -- makes the common case rather than the exception. Left at row 1's 2000 it would hand the
     -- easiest rows the fastest wave counter of all, and the counter is what drives enemy tiers,
     -- evolution and boss waves. So it is kept just under late_wave_interval here.
-    [4] = { name = 'Cosy builders', value = 0.75, max_active_biters = 768, threat_gain = 0.9, early_wave_interval = 6600, late_wave_interval = 5400, player_step = 60, minimum_wave_interval = 4800, aura_burn = 0, aura_burn_kills = 0 },
-    [5] = { name = 'Solo testing', value = 0.5, max_active_biters = 400, threat_gain = 0.3, early_wave_interval = 10800, late_wave_interval = 9000, player_step = 60, minimum_wave_interval = 8400, aura_burn = 0, aura_burn_kills = 0 }
+    -- strength_modifier and boss_modifier are unused by this map, but the difficulty module hands
+    -- them to whoever asks, so these rows carry row 1's - the bottom of the ladder - rather than
+    -- leaving them describing whatever was selected before.
+    [4] = { name = 'Cosy builders', value = 0.75, strength_modifier = 1.00, boss_modifier = 6.0, max_active_biters = 768, threat_gain = 0.9, early_wave_interval = 6600, late_wave_interval = 5400, player_step = 60, minimum_wave_interval = 4800, aura_burn = 0, aura_burn_kills = 0 },
+    [5] = { name = 'Solo testing', value = 0.5, strength_modifier = 1.00, boss_modifier = 6.0, max_active_biters = 400, threat_gain = 0.3, early_wave_interval = 10800, late_wave_interval = 9000, player_step = 60, minimum_wave_interval = 8400, aura_burn = 0, aura_burn_kills = 0 }
 }
 
 local balance_fields =
@@ -2485,6 +2488,45 @@ end
 --- Returns the raw balance rows, so commands can list and validate them.
 function Public.get_difficulty_balance_rows()
     return difficulty_balance
+end
+
+--- The fields the difficulty module describes itself with, for a balance row. Rows 1-3 take them
+--- from the vote ladder, the extra easier rows carry their own since they deliberately have no
+--- entry there. Returns nil for an index with no row.
+function Public.get_difficulty_identity(index)
+    local row = difficulty_balance[index]
+    if not row then
+        return
+    end
+
+    local voted = Difficulty.get('difficulties')[index]
+
+    return
+    {
+        name = row.name or voted and voted.name or ('row ' .. index),
+        value = row.value or voted and voted.value,
+        strength_modifier = row.strength_modifier or voted and voted.strength_modifier,
+        boss_modifier = row.boss_modifier or voted and voted.boss_modifier
+    }
+end
+
+--- Points the difficulty module at a row, writing every field its own vote handler writes. Setting
+--- just the index and value left name (and the modifiers, which other maps do read) describing
+--- whichever difficulty happened to be selected last. Returns the identity that was applied.
+function Public.apply_difficulty_row(index)
+    local identity = Public.get_difficulty_identity(index)
+    if not identity then
+        return
+    end
+
+    Difficulty.set('index', index)
+    -- Difficulty.set ignores a nil value, so a row missing one of these keeps the current one
+    -- rather than blanking it.
+    for key, value in pairs(identity) do
+        Difficulty.set(key, value)
+    end
+
+    return identity
 end
 
 --- Returns the names of the fields that may be overridden per row.
@@ -2556,13 +2598,11 @@ function Public.clear_difficulty_overrides()
     end
 end
 
---- Remembers what an admin picked so it can be restored after a map reset, which otherwise
---- puts the poll back to row 1 (tasks.lua, reset_difficulty_poll). A nil argument leaves that
---- preference untouched.
-function Public.set_difficulty_prefs(index, value)
-    local prefs = get_difficulty_prefs()
-    prefs.index = index or prefs.index
-    prefs.value = value or prefs.value
+--- Remembers which row an admin picked so it can be restored after a map reset, which otherwise
+--- puts the poll back to row 1 (tasks.lua, reset_difficulty_poll). Only the index is kept, since
+--- everything else about the row derives from it and would otherwise be a second source of truth.
+function Public.set_difficulty_prefs(index)
+    get_difficulty_prefs().index = index
 end
 
 --- Re-applies the remembered choices after a map reset. Raised from tasks.lua after
@@ -2570,11 +2610,10 @@ end
 local function restore_difficulty_prefs()
     local prefs = get_difficulty_prefs()
 
-    if prefs.index and difficulty_balance[prefs.index] then
-        Difficulty.set('index', prefs.index)
-        if prefs.value then
-            Difficulty.set('value', prefs.value)
-        end
+    -- Silently does nothing for an index the table no longer has, leaving the poll's own row 1 in
+    -- place, which is the safe direction to fail in.
+    if prefs.index then
+        Public.apply_difficulty_row(prefs.index)
     end
 
     if prefs.group_size then
