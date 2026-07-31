@@ -2508,18 +2508,61 @@ function Public.set_difficulty_override(field, value)
     get_difficulty_prefs().overrides[field] = value
 end
 
+--- average_unit_group_size lives in the wave defense table rather than in a balance row, so it
+--- cannot ride along in `overrides`. Remember what wave defense was running before the first
+--- override so clearing it can put that back, instead of guessing at wave defense's own defaults:
+--- tasks.lua re-enables the growth flag on every reset, so the module literal is not the baseline.
+local function remember_group_size_baseline()
+    local prefs = get_difficulty_prefs()
+    if prefs.group_size_baseline then
+        return
+    end
+
+    prefs.group_size_baseline =
+    {
+        size = WD.get('average_unit_group_size'),
+        increase = WD.increase_average_unit_group_size()
+    }
+end
+
+--- Growth only kicks in above wave 1000, but an override still switches it off so the value sticks.
+local function apply_group_size(size, increase)
+    WD.increase_average_unit_group_size(increase)
+    WD.set('average_unit_group_size', size)
+end
+
+--- The overridden group size, or nil while wave defense is running its own.
+function Public.get_difficulty_group_size()
+    return get_difficulty_prefs().group_size
+end
+
+function Public.set_difficulty_group_size(size)
+    remember_group_size_baseline()
+    get_difficulty_prefs().group_size = size
+    apply_group_size(size, false)
+end
+
+--- Drops everything /mtn_difficulty can override, group size included, so that resetting and
+--- picking a row both end up in a predictable state. Without the group size in here it was the one
+--- setting with no way back short of reloading the scenario, since it also survives soft resets.
 function Public.clear_difficulty_overrides()
-    get_difficulty_prefs().overrides = {}
+    local prefs = get_difficulty_prefs()
+    prefs.overrides = {}
+
+    local baseline = prefs.group_size_baseline
+    prefs.group_size = nil
+    if baseline then
+        apply_group_size(baseline.size, baseline.increase)
+    end
 end
 
 --- Remembers what an admin picked so it can be restored after a map reset, which otherwise
---- puts the poll back to row 1 (tasks.lua, reset_difficulty_poll) and the group size back to
---- the wave defense default. A nil argument leaves that preference untouched.
-function Public.set_difficulty_prefs(index, value, group_size)
+--- puts the poll back to row 1 (tasks.lua, reset_difficulty_poll). A nil argument leaves that
+--- preference untouched.
+function Public.set_difficulty_prefs(index, value)
     local prefs = get_difficulty_prefs()
     prefs.index = index or prefs.index
     prefs.value = value or prefs.value
-    prefs.group_size = group_size or prefs.group_size
 end
 
 --- Re-applies the remembered choices after a map reset. Raised from tasks.lua after
@@ -2535,8 +2578,7 @@ local function restore_difficulty_prefs()
     end
 
     if prefs.group_size then
-        WD.increase_average_unit_group_size(false)
-        WD.set('average_unit_group_size', prefs.group_size)
+        apply_group_size(prefs.group_size, false)
     end
 end
 

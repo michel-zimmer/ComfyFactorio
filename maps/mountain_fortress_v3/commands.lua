@@ -635,13 +635,17 @@ local function print_difficulty_state(player)
     -- this can never drift from what set_difficulty actually wrote.
     local wd = WD.get_table()
 
+    -- group_size is not a balance row field, so it gets its override marker here rather than in
+    -- the table above.
+    local group_size = wd.average_unit_group_size .. (Public.get_difficulty_group_size() and '*' or '')
+
     local applied = table.concat(
         {
             'applied now, ' .. Public.get_difficulty_player_count() .. ' player(s): ',
             'wave_interval=' .. wd.wave_interval .. ' ticks (' .. math.floor(wd.wave_interval / 60) .. 's)',
             ', threat_gain_multiplier=' .. math.round(wd.threat_gain_multiplier, 3),
             ', max_active_biters=' .. math.floor(wd.max_active_biters),
-            ', average_unit_group_size=' .. wd.average_unit_group_size
+            ', average_unit_group_size=' .. group_size
         }
     )
 
@@ -672,7 +676,7 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
 
             if target == 'reset' then
                 Public.clear_difficulty_overrides()
-                player.print('Difficulty overrides cleared.', { color = CommandColor })
+                player.print('Difficulty overrides and group size cleared.', { color = CommandColor })
                 print_difficulty_state(player)
                 return
             end
@@ -713,11 +717,9 @@ Commands.new('mtn_difficulty', 'Usable only for admins - lists the difficulty ro
                     player.print('group_size must be at least 1.', { color = Color.warning })
                     return false
                 end
-                -- Growth only kicks in above wave 1000, but disable it anyway so the value sticks.
-                WD.increase_average_unit_group_size(false)
-                WD.set('average_unit_group_size', math.floor(number))
-                Public.set_difficulty_prefs(nil, nil, math.floor(number))
-                player.print('average_unit_group_size set to ' .. math.floor(number) .. '.', { color = CommandColor })
+                local size = math.floor(number)
+                Public.set_difficulty_group_size(size)
+                player.print('average_unit_group_size set to ' .. size .. '.', { color = CommandColor })
                 print_difficulty_state(player)
                 return
             end
