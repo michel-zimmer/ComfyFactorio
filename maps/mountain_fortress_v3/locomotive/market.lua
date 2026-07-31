@@ -3,7 +3,6 @@ local Public = require 'maps.mountain_fortress_v3.table'
 local ICW = require 'maps.mountain_fortress_v3.icw.main'
 local WD = require 'modules.wave_defense.table'
 local Session = require 'utils.datastore.session_data'
-local Difficulty = require 'modules.difficulty_vote_by_amount'
 local RPG = require 'modules.rpg.main'
 local Gui = require 'utils.gui'
 local Server = require 'utils.server'
@@ -1623,13 +1622,6 @@ local function gui_click(event)
         if this.circle and this.circle.valid then
             this.circle.destroy()
         end
-        local difficulty_index = Difficulty.get('index')
-
-        local fill_circle = false
-        if difficulty_index == 2 or difficulty_index == 3 then
-            fill_circle = true
-        end
-
         if not this.locomotive or not this.locomotive.valid then
             Server.output_script_data('Locomotive not valid, skipping circle draw')
             return
@@ -1642,7 +1634,10 @@ local function gui_click(event)
                     color = this.locomotive.color,
                     filled = false,
                     radius = this.upgrades.locomotive_aura_radius,
-                    only_in_alt_mode = fill_circle,
+                    -- Matches the initial draw in locomotive.lua: the aura ring is alt-mode only,
+                    -- regardless of difficulty. Used to be inverted here, hiding the ring on the
+                    -- very difficulties where leaving the aura hurts.
+                    only_in_alt_mode = true,
                     width = 10
                 }
         end
