@@ -626,6 +626,11 @@ local function build_difficulty_table()
 end
 
 local function print_difficulty_state(player)
+    -- set_difficulty only runs on its own every 60 ticks, so straight after a row change or an
+    -- override the numbers below would still be the previous row's. Re-apply first; it writes the
+    -- same values the nth-tick handler would and is safe to call repeatedly.
+    Public.set_difficulty()
+
     -- Read the applied numbers straight off wave defense rather than recomputing them, so
     -- this can never drift from what set_difficulty actually wrote.
     local wd = WD.get_table()
