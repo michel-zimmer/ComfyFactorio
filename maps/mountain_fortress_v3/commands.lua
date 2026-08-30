@@ -568,6 +568,11 @@ local function build_difficulty_table()
                 value = overrides[field]
                 marker = '*'
             end
+            -- Rounded so a fractional field prints as 0.0556 rather than widening its whole column
+            -- with 0.055555555555556, which is what row 2's aura_burn of 1 / 18 rendered as.
+            if type(value) == 'number' then
+                value = math.round(value, 4)
+            end
             line[#line + 1] = tostring(value) .. marker
         end
 
